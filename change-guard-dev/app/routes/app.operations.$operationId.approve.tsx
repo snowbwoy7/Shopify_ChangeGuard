@@ -40,15 +40,29 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     approvalSecret,
   );
 
-  await prisma.operation.update({
-    where: { id: operation.id },
-    data: {
-      status: "approved",
-      approvedAt: new Date(),
-      approvalExpiresAt: new Date(expiresAt),
-      approvalTokenHash,
-    },
-  });
+  await prisma.$transaction([
+    prisma.operation.update({
+      where: { id: operation.id },
+      data: {
+        status: "approved",
+        approvedAt: new Date(),
+        approvalExpiresAt: new Date(expiresAt),
+        approvalTokenHash,
+      },
+    }),
+    prisma.operationEvent.create({
+      data: {
+        id: `event_${operation.id}_approved`,
+        operationId: operation.id,
+        shop: session.shop,
+        eventType: "approved",
+        metadataJson: JSON.stringify({
+          planHash: operation.planHash,
+          approvalExpiresAt: expiresAt,
+        }),
+      },
+    }),
+  ]);
 
   return redirect("/app");
 };
