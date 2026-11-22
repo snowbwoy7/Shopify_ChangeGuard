@@ -39,7 +39,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   try {
     assertApprovalFresh(
       operation.status as Parameters<typeof assertApprovalFresh>[0],
-      operation.approvalExpiresAt?.toISOString() ?? null,
+      operation.approvalExpiresAt,
     );
   } catch (error) {
     if (operation.status === "approved") {
