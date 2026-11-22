@@ -9,7 +9,7 @@ import {
 } from "../lib/operation-security";
 
 export const action = async ({ request, params }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
   const operationId = params.operationId;
 
   if (!operationId) {
