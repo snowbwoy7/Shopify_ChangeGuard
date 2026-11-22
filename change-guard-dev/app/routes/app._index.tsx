@@ -273,6 +273,12 @@ export default function Index() {
                 Draft operation {fetcher.data.operationId} · plan hash {fetcher.data.planHash}
               </s-paragraph>
 
+              <form method="post" action={`/app/operations/${fetcher.data.operationId}/approve`}>
+                <s-button type="submit" variant="primary">
+                  Approve this exact change plan
+                </s-button>
+              </form>
+
               {fetcher.data.capped && (
                 <s-banner tone="warning">
                   Scan stopped at the safety limit of {MAX_SCAN_PRODUCTS.toLocaleString()} products.
