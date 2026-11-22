@@ -3,7 +3,7 @@ import type {
   HeadersFunction,
   LoaderFunctionArgs,
 } from "react-router";
-import { useFetcher } from "react-router";
+import { useFetcher, useLoaderData } from "react-router";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
@@ -216,7 +216,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function Index() {
-  const fetcher = useFetcher<typeof action>();
+  const fetcher = useFetcher<typeof action>();\n  const loaderData = useLoaderData<typeof loader>();
   const plan = fetcher.data?.ok ? fetcher.data.plan : null;
   const isLoading = fetcher.state !== "idle";
 
@@ -226,7 +226,32 @@ export default function Index() {
         Preview. Understand. Approve. Change. Verify.
       </s-text>
 
-      <s-section heading="New price change">
+
+
+      {loaderData.approvedOperations.length > 0 && (
+        <s-section heading="Approved changes">
+          <s-stack direction="block" gap="base">
+            {loaderData.approvedOperations.map((operation) => (
+              <s-banner key={operation.id} tone="warning">
+                <s-stack direction="block" gap="small">
+                  <s-paragraph>
+                    Approved operation {operation.id} · expires{" "}
+                    {operation.approvalExpiresAt
+                      ? new Date(operation.approvalExpiresAt).toLocaleString()
+                      : "unknown"}
+                  </s-paragraph>
+                  <form method="post" action={`/app/operations/${operation.id}/execute`}>
+                    <s-button type="submit" variant="primary">
+                      Execute approved change
+                    </s-button>
+                  </form>
+                </s-stack>
+              </s-banner>
+            ))}
+          </s-stack>
+        </s-section>
+      )}
+\n      <s-section heading="New price change">
         <s-paragraph>
           ChangeGuard scans matching products and calculates the proposed result
           before any Shopify data is modified. This first version is preview-only.
