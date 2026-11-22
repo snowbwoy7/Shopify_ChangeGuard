@@ -1,8 +1,13 @@
-import { randomUUID } from "node:crypto";
 import type { ActionFunctionArgs } from "react-router";
 import { redirect } from "react-router";
 import { authenticate } from "../shopify.server";
-import prisma from "../db.server";
+import {
+  claimOperationForExecution,
+  findOperationById,
+  markExpired,
+  markOperationExecuted,
+  markOperationFailed,
+} from "../lib/operation-store.server";
 import {
   assertApprovalFresh,
   createApprovalTokenHash,
@@ -25,9 +30,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     });
   }
 
-  const operation = await prisma.operation.findUnique({
-    where: { id: operationId },
-  });
+  const operation = await findOperationById(operationId);
 
   if (!operation || operation.shop !== session.shop) {
     throw new Response("Operation not found.", { status: 404 });
@@ -40,10 +43,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     );
   } catch (error) {
     if (operation.status === "approved") {
-      await prisma.operation.update({
-        where: { id: operation.id },
-        data: { status: "expired" },
-      });
+      await markExpired(operation.id, session.shop);
     }
 
     throw new Response(
@@ -70,43 +70,13 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
 
   const consumedAt = new Date();
 
-  const claimed = await prisma.$transaction(async (tx) => {
-    const result = await tx.operation.updateMany({
-      where: {
-        id: operation.id,
-        shop: session.shop,
-        status: "approved",
-        planHash: operation.planHash,
-        approvalTokenHash: expectedApprovalHash,
-        approvalExpiresAt: { gt: consumedAt },
-      },
-      data: {
-        status: "consumed",
-        consumedAt,
-        executionStartedAt: consumedAt,
-        executionAttempts: { increment: 1 },
-      },
-    });
-
-    if (result.count !== 1) {
-      return false;
-    }
-
-    await tx.operationEvent.create({
-      data: {
-        id: randomUUID(),
-        operationId: operation.id,
-        shop: session.shop,
-        eventType: "execution_started",
-        metadataJson: JSON.stringify({
-          planHash: operation.planHash,
-          consumedAt: consumedAt.toISOString(),
-        }),
-      },
-    });
-
-    return true;
-  });
+  const claimed = await claimOperationForExecution(
+    operation.id,
+    session.shop,
+    operation.planHash,
+    expectedApprovalHash,
+    consumedAt,
+  );
 
   if (!claimed) {
     throw new Response(
@@ -118,49 +88,12 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   try {
     const result = await executePriceChangePlan(admin, plan);
 
-    await prisma.$transaction([
-      prisma.operation.update({
-        where: { id: operation.id },
-        data: {
-          status: "executed",
-          executedAt: new Date(),
-        },
-      }),
-      prisma.operationEvent.create({
-        data: {
-          id: randomUUID(),
-          operationId: operation.id,
-          shop: session.shop,
-          eventType: "execution_completed",
-          metadataJson: JSON.stringify(result),
-        },
-      }),
-    ]);
+    await markOperationExecuted(operation.id, session.shop, result);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Shopify execution failed.";
 
-    await prisma.$transaction([
-      prisma.operation.update({
-        where: { id: operation.id },
-        data: {
-          status: "failed",
-          executionFailedAt: new Date(),
-          failureReason: message.slice(0, 4000),
-        },
-      }),
-      prisma.operationEvent.create({
-        data: {
-          id: randomUUID(),
-          operationId: operation.id,
-          shop: session.shop,
-          eventType: "execution_failed",
-          metadataJson: JSON.stringify({
-            message: message.slice(0, 4000),
-          }),
-        },
-      }),
-    ]);
+    await markOperationFailed(operation.id, session.shop, message);
 
     throw new Response(
       "Execution stopped safely. The operation was marked failed for review.",
