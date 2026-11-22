@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 import { redirect } from "react-router";
 import { authenticate } from "../shopify.server";
-import prisma from "../db.server";
+import { approveOperation, findOperationById } from "../lib/operation-store.server";
 import {
   createApprovalExpiry,
   createApprovalTokenHash,
@@ -15,9 +15,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     throw new Response("Operation ID is required.", { status: 400 });
   }
 
-  const operation = await prisma.operation.findUnique({
-    where: { id: operationId },
-  });
+  const operation = await findOperationById(operationId);
 
   if (!operation || operation.shop !== session.shop) {
     throw new Response("Operation not found.", { status: 404 });
@@ -40,29 +38,19 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     approvalSecret,
   );
 
-  await prisma.$transaction([
-    prisma.operation.update({
-      where: { id: operation.id },
-      data: {
-        status: "approved",
-        approvedAt: new Date(),
-        approvalExpiresAt: new Date(expiresAt),
-        approvalTokenHash,
-      },
-    }),
-    prisma.operationEvent.create({
-      data: {
-        id: `event_${operation.id}_approved`,
-        operationId: operation.id,
-        shop: session.shop,
-        eventType: "approved",
-        metadataJson: JSON.stringify({
-          planHash: operation.planHash,
-          approvalExpiresAt: expiresAt,
-        }),
-      },
-    }),
-  ]);
+  const approved = await approveOperation(
+    operation.id,
+    session.shop,
+    operation.planHash,
+    approvalTokenHash,
+    expiresAt,
+  );
+
+  if (!approved) {
+    throw new Response("Operation could not be approved because it changed or was already approved.", {
+      status: 409,
+    });
+  }
 
   return redirect("/app");
 };
