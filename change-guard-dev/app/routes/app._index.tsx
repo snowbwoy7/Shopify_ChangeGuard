@@ -5,7 +5,7 @@ import type {
 } from "react-router";
 import { useFetcher, useLoaderData } from "react-router";
 import { authenticate } from "../shopify.server";
-import prisma from "../db.server";
+import { listApprovedOperations, createOperationWithEvent } from "../lib/operation-store.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import {
   buildPriceChangePlan,
@@ -158,21 +158,7 @@ async function readProducts(
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
 
-  const approvedOperations = await prisma.operation.findMany({
-    where: {
-      shop: session.shop,
-      status: "approved",
-      approvalExpiresAt: { gt: new Date() },
-    },
-    select: {
-      id: true,
-      planHash: true,
-      approvedAt: true,
-      approvalExpiresAt: true,
-    },
-    orderBy: { approvedAt: "desc" },
-    take: 10,
-  });
+  const approvedOperations = await listApprovedOperations(session.shop);
 
   return { approvedOperations };
 };
@@ -225,31 +211,13 @@ export const action = async ({ request }: ActionFunctionArgs): Promise<ChangePla
       scopeValue,
     }, plan);
 
-    await prisma.$transaction([
-      prisma.operation.create({
-        data: {
-          id: operationDraft.id,
-          shop: operationDraft.shop,
-          status: operationDraft.status,
-          operationType: operationDraft.operationType,
-          inputJson: JSON.stringify(operationDraft.input),
-          planJson: JSON.stringify(operationDraft.plan),
-          planHash: operationDraft.planHash,
-        },
-      }),
-      prisma.operationEvent.create({
-        data: {
-          id: `event_${operationDraft.id}`,
-          operationId: operationDraft.id,
-          shop: session.shop,
-          eventType: "draft_created",
-          metadataJson: JSON.stringify({
-            planHash: operationDraft.planHash,
-            variantsScanned: plan.variantsScanned,
-          }),
-        },
-      }),
-    ]);
+    await createOperationWithEvent(
+      operationDraft,
+      {
+        planHash: operationDraft.planHash,
+        variantsScanned: plan.variantsScanned,
+      },
+    );
 
     return {
       ok: true,
