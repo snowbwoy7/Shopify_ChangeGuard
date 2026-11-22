@@ -41,14 +41,6 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Diagnose test files
-        run: |
-          pwd
-          git rev-parse HEAD
-          git status --short
-          git ls-files change-guard-dev/tests
-          ls -la tests
-
       - name: Tests
         run: npm test
 
