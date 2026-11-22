@@ -1,10 +1,11 @@
+import { randomUUID } from "node:crypto";
 import type { ActionFunctionArgs } from "react-router";
 import { redirect } from "react-router";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import {
-  APPROVAL_TTL_MS,
   createApprovalExpiry,
+  createApprovalTokenHash,
 } from "../lib/operation-security";
 
 export const action = async ({ request, params }: ActionFunctionArgs) => {
@@ -28,8 +29,11 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   }
 
   const expiresAt = createApprovalExpiry();
-  const approvalTokenHash = createApprovalExpiry(
-    new Date(Date.now() - APPROVAL_TTL_MS),
+  const approvalToken = randomUUID();
+  const approvalTokenHash = createApprovalTokenHash(
+    operation.id,
+    operation.planHash,
+    approvalToken,
   );
 
   await prisma.operation.update({
