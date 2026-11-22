@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { blob, index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const sessionTable = sqliteTable("session", {
   id: text("id").primaryKey(),
@@ -8,7 +8,7 @@ export const sessionTable = sqliteTable("session", {
   scope: text("scope"),
   expires: text("expires"),
   accessToken: text("accessToken"),
-  userId: text("userId"),
+  userId: blob("userId", { mode: "bigint" }),
 });
 
 export const operationTable = sqliteTable(
