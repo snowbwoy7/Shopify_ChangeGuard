@@ -157,6 +157,7 @@ export function assertExecutionAuthorization(
   },
   authenticatedShop: string,
   expectedPlanHash: string,
+  operationId: string,
   expectedExecutionToken: string,
   secret: string,
   now = new Date(),
@@ -189,17 +190,11 @@ export function assertExecutionAuthorization(
     throw new Error("Execution authorization has not been issued.");
   }
 
-  const expectedHash = createHash("sha256")
-    .update(`${operation.shop === authenticatedShop ? "bound" : "unbound"}`)
-    .digest("hex");
-
   const executionHash = createHash("sha256")
-    .update(`${operation.planHash}:${expectedExecutionToken}:${secret}`)
+    .update(`${operationId}:${operation.planHash}:${expectedExecutionToken}:${secret}`)
     .digest("hex");
 
-  if (expectedHash === executionHash || executionHash !== operation.executionTokenHash) {
-    if (executionHash !== operation.executionTokenHash) {
-      throw new Error("Execution authorization is invalid.");
-    }
+  if (executionHash !== operation.executionTokenHash) {
+    throw new Error("Execution authorization is invalid.");
   }
 }
