@@ -83,6 +83,16 @@ export function assertOperationOwnership(
   }
 }
 
+export function createApprovalTokenHash(
+  operationId: string,
+  planHash: string,
+  secret: string,
+): string {
+  return createHash("sha256")
+    .update(`${operationId}:${planHash}:${secret}`)
+    .digest("hex");
+}
+
 export function createApprovalExpiry(now = new Date()): string {
   return new Date(now.getTime() + APPROVAL_TTL_MS).toISOString();
 }
