@@ -2,9 +2,9 @@ import { createHash, randomUUID } from "node:crypto";
 import type { ChangePlan, PriceChangeInput } from "./change-plan";
 
 export const MAX_APPROVAL_VARIANTS = 5_000;
-export const APPROVAL_TTL_MS = 15 * 60 * 1000;
+export const APPROVAL_TTL_MS = 15 * 60 * 1000;\nexport const EXECUTION_TOKEN_BYTES = 32;
 
-export type OperationStatus = "draft" | "approved" | "consumed" | "executed" | "expired";
+export type OperationStatus = "draft" | "approved" | "consumed" | "executed" | "failed" | "expired";
 
 export type OperationInput = {
   operation: PriceChangeInput["operation"];
@@ -108,5 +108,98 @@ export function assertApprovalFresh(
 
   if (!approvalExpiresAt || new Date(approvalExpiresAt).getTime() <= now.getTime()) {
     throw new Error("Operation approval has expired.");
+  }
+}
+
+
+export type ExecutionAuthorization = {
+  operationId: string;
+  shop: string;
+  planHash: string;
+  executionToken: string;
+  executionTokenHash: string;
+};
+
+export function createExecutionAuthorization(
+  operationId: string,
+  shop: string,
+  planHash: string,
+  secret: string,
+): ExecutionAuthorization {
+  if (!operationId || !shop || !planHash || !secret) {
+    throw new Error("Execution authorization requires an authenticated operation context.");
+  }
+
+  const executionToken = Buffer.from(
+    randomUUID() + randomUUID(),
+  ).toString("base64url");
+  const executionTokenHash = createHash("sha256")
+    .update(`${operationId}:${planHash}:${executionToken}:${secret}`)
+    .digest("hex");
+
+  return {
+    operationId,
+    shop,
+    planHash,
+    executionToken,
+    executionTokenHash,
+  };
+}
+
+export function assertExecutionAuthorization(
+  operation: {
+    shop: string;
+    status: OperationStatus;
+    planHash: string;
+    approvalTokenHash: string | null;
+    approvalExpiresAt: Date | string | null;
+    executionTokenHash: string | null;
+  },
+  authenticatedShop: string,
+  expectedPlanHash: string,
+  expectedExecutionToken: string,
+  secret: string,
+  now = new Date(),
+): void {
+  if (!authenticatedShop || operation.shop !== authenticatedShop) {
+    throw new Error("Operation does not belong to the authenticated Shopify shop.");
+  }
+
+  if (operation.status !== "approved") {
+    throw new Error("Only an approved operation can enter execution.");
+  }
+
+  if (operation.planHash !== expectedPlanHash) {
+    throw new Error("Operation plan hash does not match the approved plan.");
+  }
+
+  assertApprovalFresh(
+    operation.status,
+    operation.approvalExpiresAt
+      ? new Date(operation.approvalExpiresAt).toISOString()
+      : null,
+    now,
+  );
+
+  if (!operation.approvalTokenHash) {
+    throw new Error("Operation approval proof is missing.");
+  }
+
+  if (!operation.executionTokenHash) {
+    throw new Error("Execution authorization has not been issued.");
+  }
+
+  const expectedHash = createHash("sha256")
+    .update(`${operation.shop === authenticatedShop ? "bound" : "unbound"}`)
+    .digest("hex");
+
+  const executionHash = createHash("sha256")
+    .update(`${operation.planHash}:${expectedExecutionToken}:${secret}`)
+    .digest("hex");
+
+  if (expectedHash === executionHash || executionHash !== operation.executionTokenHash) {
+    if (executionHash !== operation.executionTokenHash) {
+      throw new Error("Execution authorization is invalid.");
+    }
   }
 }
