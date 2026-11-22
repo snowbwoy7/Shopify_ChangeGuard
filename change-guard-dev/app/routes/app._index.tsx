@@ -43,6 +43,30 @@ function buildProductQuery(formData: FormData): string | undefined {
   }
 }
 
+type ShopifyProductsPayload = {
+  data?: {
+    products?: {
+      edges: Array<{
+        cursor: string;
+        node: {
+          id: string;
+          title: string;
+          handle: string;
+          status: string;
+          vendor: string;
+          productType: string;
+          tags: string[];
+          variants: {
+            nodes: Array<{ id: string; title: string; price: string }>;
+          };
+        };
+      }>;
+      pageInfo: { hasNextPage: boolean; endCursor: string | null };
+    };
+  };
+  errors?: Array<{ message: string }>;
+};
+
 async function readProducts(
   admin: Awaited<ReturnType<typeof authenticate.admin>>["admin"],
   query: string | undefined,
@@ -89,7 +113,7 @@ async function readProducts(
       },
     );
 
-    const payload = await response.json();
+    const payload = (await response.json()) as ShopifyProductsPayload;
 
     if (payload.errors?.length) {
       throw new Error(payload.errors.map((error: { message: string }) => error.message).join("; "));
@@ -153,7 +177,20 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return { approvedOperations };
 };
 
-export const action = async ({ request }: ActionFunctionArgs) => {
+type ChangePlanActionData =
+  | {
+      ok: true;
+      operationId: string;
+      planHash: string;
+      plan: ReturnType<typeof buildPriceChangePlan>;
+      capped: boolean;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+export const action = async ({ request }: ActionFunctionArgs): Promise<ChangePlanActionData> => {
   const { admin, session } = await authenticate.admin(request);
   const formData = await request.formData();
 
@@ -235,7 +272,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 export default function Index() {
   const fetcher = useFetcher<typeof action>();
   const loaderData = useLoaderData<typeof loader>();
-  const plan = fetcher.data?.ok ? fetcher.data.plan : null;
+  const actionData = fetcher.data;
+  const plan = actionData?.ok ? actionData.plan : null;
   const isLoading = fetcher.state !== "idle";
 
   return (
@@ -311,10 +349,10 @@ export default function Index() {
         </fetcher.Form>
       </s-section>
 
-      {fetcher.data && !fetcher.data.ok && (
+      {actionData && !actionData.ok && (
         <s-section>
           <s-banner tone="critical">
-            {fetcher.data.error}
+            {actionData.error}
           </s-banner>
         </s-section>
       )}
@@ -327,16 +365,16 @@ export default function Index() {
                 Preview only. No Shopify records have been changed.
               </s-banner>
               <s-paragraph>
-                Draft operation {fetcher.data.operationId} · plan hash {fetcher.data.planHash}
+                Draft operation {actionData?.ok ? actionData.operationId : ""} · plan hash {actionData?.ok ? actionData.planHash : ""}
               </s-paragraph>
 
-              <form method="post" action={`/app/operations/${fetcher.data.operationId}/approve`}>
+              <form method="post" action={`/app/operations/${actionData?.ok ? actionData.operationId : ""}/approve`}>
                 <s-button type="submit" variant="primary">
                   Approve this exact change plan
                 </s-button>
               </form>
 
-              {fetcher.data.capped && (
+              {actionData?.ok && actionData.capped && (
                 <s-banner tone="warning">
                   Scan stopped at the safety limit of {MAX_SCAN_PRODUCTS.toLocaleString()} products.
                 </s-banner>
@@ -350,23 +388,23 @@ export default function Index() {
                 <s-table-body>
                   <s-table-row>
                     <s-table-cell>Products scanned</s-table-cell>
-                    <s-table-cell>{plan.recordsScanned}</s-table-cell>
+                    <s-table-cell>{String(plan.recordsScanned)}</s-table-cell>
                   </s-table-row>
                   <s-table-row>
                     <s-table-cell>Variants scanned</s-table-cell>
-                    <s-table-cell>{plan.variantsScanned}</s-table-cell>
+                    <s-table-cell>{String(plan.variantsScanned)}</s-table-cell>
                   </s-table-row>
                   <s-table-row>
                     <s-table-cell>Will change</s-table-cell>
-                    <s-table-cell>{plan.variantsToChange}</s-table-cell>
+                    <s-table-cell>{String(plan.variantsToChange)}</s-table-cell>
                   </s-table-row>
                   <s-table-row>
                     <s-table-cell>Unchanged</s-table-cell>
-                    <s-table-cell>{plan.unchanged}</s-table-cell>
+                    <s-table-cell>{String(plan.unchanged)}</s-table-cell>
                   </s-table-row>
                   <s-table-row>
                     <s-table-cell>Errors</s-table-cell>
-                    <s-table-cell>{plan.errors}</s-table-cell>
+                    <s-table-cell>{String(plan.errors)}</s-table-cell>
                   </s-table-row>
                 </s-table-body>
               </s-table>
