@@ -61,7 +61,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     throw new Response("Operation approval proof is invalid.", { status: 403 });
   }
 
-  const consumedAt = new Date();
+  const plan = operation.planJson ? JSON.parse(operation.planJson) : null;\n\n  if (!plan) {\n    throw new Response("Approved operation plan is missing.", { status: 500 });\n  }\n\n  const consumedAt = new Date();
 
   const claimed = await prisma.$transaction(async (tx) => {
     const result = await tx.operation.updateMany({
