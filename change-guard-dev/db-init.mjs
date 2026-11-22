@@ -12,8 +12,17 @@ const statements = [
     isOnline INTEGER NOT NULL DEFAULT 0,
     scope TEXT,
     expires TEXT,
-    accessToken TEXT,
-    userId TEXT
+    accessToken TEXT NOT NULL,
+    userId TEXT,
+    firstName TEXT,
+    lastName TEXT,
+    email TEXT,
+    accountOwner INTEGER,
+    locale TEXT,
+    collaborator INTEGER,
+    emailVerified INTEGER,
+    refreshToken TEXT,
+    refreshTokenExpires TEXT
   )`,
   `CREATE INDEX IF NOT EXISTS session_shop_idx ON session(shop)`,
   `CREATE TABLE IF NOT EXISTS Operation (
@@ -56,6 +65,31 @@ const statements = [
 
 for (const sql of statements) {
   await client.execute(sql);
+}
+
+// Upgrade databases created by earlier ChangeGuard Drizzle migrations.
+// SQLite only permits ADD COLUMN for missing columns, so each statement is
+// intentionally tolerant of an already-upgraded database.
+const optionalSessionColumns = [
+  ["firstName", "TEXT"],
+  ["lastName", "TEXT"],
+  ["email", "TEXT"],
+  ["accountOwner", "INTEGER"],
+  ["locale", "TEXT"],
+  ["collaborator", "INTEGER"],
+  ["emailVerified", "INTEGER"],
+  ["refreshToken", "TEXT"],
+  ["refreshTokenExpires", "TEXT"],
+];
+
+for (const [name, type] of optionalSessionColumns) {
+  try {
+    await client.execute(`ALTER TABLE session ADD COLUMN ${name} ${type}`);
+  } catch (error) {
+    if (!String(error).toLowerCase().includes("duplicate column")) {
+      throw error;
+    }
+  }
 }
 
 console.log("ChangeGuard database schema is ready.");
