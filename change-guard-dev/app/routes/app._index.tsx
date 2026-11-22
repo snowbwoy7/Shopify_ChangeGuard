@@ -13,14 +13,6 @@ import {
 
 const MAX_SCAN_PRODUCTS = 10_000;
 
-type Scope =
-  | "all"
-  | "collection"
-  | "product_type"
-  | "vendor"
-  | "tag"
-  | "status";
-
 function escapeSearchValue(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
