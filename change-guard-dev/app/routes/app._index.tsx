@@ -3,13 +3,15 @@ import type {
   HeadersFunction,
   LoaderFunctionArgs,
 } from "react-router";
-import { useFetcher } from "react-router";
+import { useFetcher, useLoaderData } from "react-router";
 import { authenticate } from "../shopify.server";
+import { listApprovedOperations, createOperationWithEvent } from "../lib/operation-store.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import {
   buildPriceChangePlan,
   type ProductSnapshot,
 } from "../lib/change-plan";
+import { createOperationDraft } from "../lib/operation-security";
 
 const MAX_SCAN_PRODUCTS = 10_000;
 
@@ -40,6 +42,30 @@ function buildProductQuery(formData: FormData): string | undefined {
       return undefined;
   }
 }
+
+type ShopifyProductsPayload = {
+  data?: {
+    products?: {
+      edges: Array<{
+        cursor: string;
+        node: {
+          id: string;
+          title: string;
+          handle: string;
+          status: string;
+          vendor: string;
+          productType: string;
+          tags: string[];
+          variants: {
+            nodes: Array<{ id: string; title: string; price: string }>;
+          };
+        };
+      }>;
+      pageInfo: { hasNextPage: boolean; endCursor: string | null };
+    };
+  };
+  errors?: Array<{ message: string }>;
+};
 
 async function readProducts(
   admin: Awaited<ReturnType<typeof authenticate.admin>>["admin"],
@@ -87,7 +113,7 @@ async function readProducts(
       },
     );
 
-    const payload = await response.json();
+    const payload = (await response.json()) as ShopifyProductsPayload;
 
     if (payload.errors?.length) {
       throw new Error(payload.errors.map((error: { message: string }) => error.message).join("; "));
@@ -130,12 +156,28 @@ async function readProducts(
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
-  return null;
+  const { session } = await authenticate.admin(request);
+
+  const approvedOperations = await listApprovedOperations(session.shop);
+
+  return { approvedOperations };
 };
 
-export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin } = await authenticate.admin(request);
+type ChangePlanActionData =
+  | {
+      ok: true;
+      operationId: string;
+      planHash: string;
+      plan: ReturnType<typeof buildPriceChangePlan>;
+      capped: boolean;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+export const action = async ({ request }: ActionFunctionArgs): Promise<ChangePlanActionData> => {
+  const { admin, session } = await authenticate.admin(request);
   const formData = await request.formData();
 
   const operation = String(formData.get("operation") ?? "percentage");
@@ -162,8 +204,25 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       value,
     });
 
+    const operationDraft = createOperationDraft(session.shop, {
+      operation,
+      value,
+      scope,
+      scopeValue,
+    }, plan);
+
+    await createOperationWithEvent(
+      operationDraft,
+      {
+        planHash: operationDraft.planHash,
+        variantsScanned: plan.variantsScanned,
+      },
+    );
+
     return {
       ok: true,
+      operationId: operationDraft.id,
+      planHash: operationDraft.planHash,
       plan,
       capped: products.length >= MAX_SCAN_PRODUCTS,
     };
@@ -180,7 +239,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
 export default function Index() {
   const fetcher = useFetcher<typeof action>();
-  const plan = fetcher.data?.ok ? fetcher.data.plan : null;
+  const loaderData = useLoaderData<typeof loader>();
+  const actionData = fetcher.data;
+  const plan = actionData?.ok ? actionData.plan : null;
   const isLoading = fetcher.state !== "idle";
 
   return (
@@ -189,7 +250,32 @@ export default function Index() {
         Preview. Understand. Approve. Change. Verify.
       </s-text>
 
-      <s-section heading="New price change">
+
+
+      {loaderData.approvedOperations.length > 0 && (
+        <s-section heading="Approved changes">
+          <s-stack direction="block" gap="base">
+            {loaderData.approvedOperations.map((operation) => (
+              <s-banner key={operation.id} tone="warning">
+                <s-stack direction="block" gap="small">
+                  <s-paragraph>
+                    Approved operation {operation.id} · expires{" "}
+                    {operation.approvalExpiresAt
+                      ? new Date(operation.approvalExpiresAt).toLocaleString()
+                      : "unknown"}
+                  </s-paragraph>
+                  <form method="post" action={`/app/operations/${operation.id}/execute`}>
+                    <s-button type="submit" variant="primary">
+                      Execute approved change
+                    </s-button>
+                  </form>
+                </s-stack>
+              </s-banner>
+            ))}
+          </s-stack>
+        </s-section>
+      )}
+\n      <s-section heading="New price change">
         <s-paragraph>
           ChangeGuard scans matching products and calculates the proposed result
           before any Shopify data is modified. This first version is preview-only.
@@ -205,8 +291,8 @@ export default function Index() {
             <s-number-field
               label="Change value"
               name="value"
-              step="0.01"
-              min="-1000000"
+              step={0.01}
+              min={-1000000}
               required
             ></s-number-field>
 
@@ -231,10 +317,10 @@ export default function Index() {
         </fetcher.Form>
       </s-section>
 
-      {fetcher.data && !fetcher.data.ok && (
+      {actionData && !actionData.ok && (
         <s-section>
           <s-banner tone="critical">
-            {fetcher.data.error}
+            {actionData.error}
           </s-banner>
         </s-section>
       )}
@@ -246,8 +332,17 @@ export default function Index() {
               <s-banner tone="info">
                 Preview only. No Shopify records have been changed.
               </s-banner>
+              <s-paragraph>
+                Draft operation {actionData?.ok ? actionData.operationId : ""} · plan hash {actionData?.ok ? actionData.planHash : ""}
+              </s-paragraph>
 
-              {fetcher.data.capped && (
+              <form method="post" action={`/app/operations/${actionData?.ok ? actionData.operationId : ""}/approve`}>
+                <s-button type="submit" variant="primary">
+                  Approve this exact change plan
+                </s-button>
+              </form>
+
+              {actionData?.ok && actionData.capped && (
                 <s-banner tone="warning">
                   Scan stopped at the safety limit of {MAX_SCAN_PRODUCTS.toLocaleString()} products.
                 </s-banner>
@@ -261,23 +356,23 @@ export default function Index() {
                 <s-table-body>
                   <s-table-row>
                     <s-table-cell>Products scanned</s-table-cell>
-                    <s-table-cell>{plan.recordsScanned}</s-table-cell>
+                    <s-table-cell>{String(plan.recordsScanned)}</s-table-cell>
                   </s-table-row>
                   <s-table-row>
                     <s-table-cell>Variants scanned</s-table-cell>
-                    <s-table-cell>{plan.variantsScanned}</s-table-cell>
+                    <s-table-cell>{String(plan.variantsScanned)}</s-table-cell>
                   </s-table-row>
                   <s-table-row>
                     <s-table-cell>Will change</s-table-cell>
-                    <s-table-cell>{plan.variantsToChange}</s-table-cell>
+                    <s-table-cell>{String(plan.variantsToChange)}</s-table-cell>
                   </s-table-row>
                   <s-table-row>
                     <s-table-cell>Unchanged</s-table-cell>
-                    <s-table-cell>{plan.unchanged}</s-table-cell>
+                    <s-table-cell>{String(plan.unchanged)}</s-table-cell>
                   </s-table-row>
                   <s-table-row>
                     <s-table-cell>Errors</s-table-cell>
-                    <s-table-cell>{plan.errors}</s-table-cell>
+                    <s-table-cell>{String(plan.errors)}</s-table-cell>
                   </s-table-row>
                 </s-table-body>
               </s-table>
