@@ -323,8 +323,8 @@ export default function Index() {
             <s-number-field
               label="Change value"
               name="value"
-              step="0.01"
-              min="-1000000"
+              step={0.01}
+              min={-1000000}
               required
             ></s-number-field>
 
