@@ -132,8 +132,25 @@ async function readProducts(
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
-  return null;
+  const { session } = await authenticate.admin(request);
+
+  const approvedOperations = await prisma.operation.findMany({
+    where: {
+      shop: session.shop,
+      status: "approved",
+      approvalExpiresAt: { gt: new Date() },
+    },
+    select: {
+      id: true,
+      planHash: true,
+      approvedAt: true,
+      approvalExpiresAt: true,
+    },
+    orderBy: { approvedAt: "desc" },
+    take: 10,
+  });
+
+  return { approvedOperations };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -216,7 +233,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function Index() {
-  const fetcher = useFetcher<typeof action>();\n  const loaderData = useLoaderData<typeof loader>();
+  const fetcher = useFetcher<typeof action>();
+  const loaderData = useLoaderData<typeof loader>();
   const plan = fetcher.data?.ok ? fetcher.data.plan : null;
   const isLoading = fetcher.state !== "idle";
 
