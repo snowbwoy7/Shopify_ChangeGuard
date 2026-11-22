@@ -50,3 +50,15 @@ model Operation {
   @@index([shop, status])
   @@index([planHash])
 }
+
+model OperationEvent {
+  id          String   @id
+  operationId String
+  shop        String
+  eventType   String
+  metadataJson String?
+  createdAt   DateTime @default(now())
+
+  @@index([operationId, createdAt])
+  @@index([shop, createdAt])
+}
