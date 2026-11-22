@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type { ActionFunctionArgs } from "react-router";
 import { redirect } from "react-router";
 import { authenticate } from "../shopify.server";
@@ -29,11 +28,16 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   }
 
   const expiresAt = createApprovalExpiry();
-  const approvalToken = randomUUID();
+  const approvalSecret = process.env.SHOPIFY_API_SECRET;
+
+  if (!approvalSecret) {
+    throw new Response("Approval security configuration is unavailable.", { status: 500 });
+  }
+
   const approvalTokenHash = createApprovalTokenHash(
     operation.id,
     operation.planHash,
-    approvalToken,
+    approvalSecret,
   );
 
   await prisma.operation.update({
