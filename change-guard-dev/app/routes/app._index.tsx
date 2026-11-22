@@ -171,17 +171,31 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       scopeValue,
     }, plan);
 
-    await prisma.operation.create({
-      data: {
-        id: operationDraft.id,
-        shop: operationDraft.shop,
-        status: operationDraft.status,
-        operationType: operationDraft.operationType,
-        inputJson: JSON.stringify(operationDraft.input),
-        planJson: JSON.stringify(operationDraft.plan),
-        planHash: operationDraft.planHash,
-      },
-    });
+    await prisma.$transaction([
+      prisma.operation.create({
+        data: {
+          id: operationDraft.id,
+          shop: operationDraft.shop,
+          status: operationDraft.status,
+          operationType: operationDraft.operationType,
+          inputJson: JSON.stringify(operationDraft.input),
+          planJson: JSON.stringify(operationDraft.plan),
+          planHash: operationDraft.planHash,
+        },
+      }),
+      prisma.operationEvent.create({
+        data: {
+          id: `event_${operationDraft.id}`,
+          operationId: operationDraft.id,
+          shop: session.shop,
+          eventType: "draft_created",
+          metadataJson: JSON.stringify({
+            planHash: operationDraft.planHash,
+            variantsScanned: plan.variantsScanned,
+          }),
+        },
+      }),
+    ]);
 
     return {
       ok: true,
