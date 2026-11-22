@@ -203,6 +203,26 @@ export async function executePriceChangePlan(
       if (toUpdate.length === 0) continue;
 
       await updateProductVariants(admin, productId, toUpdate);
+
+      // Verify the persisted values after the mutation. A successful GraphQL
+      // response alone is not sufficient evidence that the approved prices
+      // are now present in Shopify.
+      const verified = await readCurrentVariants(
+        admin,
+        productId,
+        toUpdate.map((item) => item.id),
+      );
+
+      for (const item of toUpdate) {
+        const actualAfter = verified.get(item.id);
+
+        if (actualAfter !== item.price) {
+          throw new Error(
+            `Product ${productId}, variant ${item.id}: post-write verification failed. Expected ${item.price}, Shopify returned ${actualAfter ?? "missing"}.`,
+          );
+        }
+      }
+
       result.applied += toUpdate.length;
     } catch (error) {
       result.errors.push(
