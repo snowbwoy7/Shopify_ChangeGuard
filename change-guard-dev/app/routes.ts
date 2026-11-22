@@ -1,3 +1,19 @@
-import { flatRoutes } from "@react-router/fs-routes";
+import {
+  type RouteConfig,
+  index,
+  route,
+} from "@react-router/dev/routes";
 
-export default flatRoutes();
+export default [
+  index("./routes/_index/route.tsx"),
+  route("app", "./routes/app.tsx", [
+    index("./routes/app._index.tsx"),
+    route("additional", "./routes/app.additional.tsx"),
+    route("operations/:operationId/approve", "./routes/app.operations.$operationId.approve.tsx"),
+    route("operations/:operationId/execute", "./routes/app.operations.$operationId.execute.tsx"),
+  ]),
+  route("auth/*", "./routes/auth.$.tsx"),
+  route("webhooks/app/scopes_update", "./routes/webhooks.app.scopes_update.tsx"),
+  route("webhooks/app/uninstalled", "./routes/webhooks.app.uninstalled.tsx"),
+  route("webhooks/products/update", "./routes/webhooks.products.update.tsx"),
+] satisfies RouteConfig;
