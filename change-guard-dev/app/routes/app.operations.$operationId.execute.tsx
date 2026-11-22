@@ -7,6 +7,7 @@ import {
   assertApprovalFresh,
   createApprovalTokenHash,
 } from "../lib/operation-security";
+import { executePriceChangePlan } from "../lib/price-operation-executor";
 
 export const action = async ({ request, params }: ActionFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -61,7 +62,13 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     throw new Response("Operation approval proof is invalid.", { status: 403 });
   }
 
-  const plan = operation.planJson ? JSON.parse(operation.planJson) : null;\n\n  if (!plan) {\n    throw new Response("Approved operation plan is missing.", { status: 500 });\n  }\n\n  const consumedAt = new Date();
+  const plan = operation.planJson ? JSON.parse(operation.planJson) : null;
+
+  if (!plan) {
+    throw new Response("Approved operation plan is missing.", { status: 500 });
+  }
+
+  const consumedAt = new Date();
 
   const claimed = await prisma.$transaction(async (tx) => {
     const result = await tx.operation.updateMany({
@@ -104,6 +111,59 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   if (!claimed) {
     throw new Response(
       "Execution was rejected because this operation was already consumed or is no longer valid.",
+      { status: 409 },
+    );
+  }
+
+  try {
+    const result = await executePriceChangePlan(admin, plan);
+
+    await prisma.$transaction([
+      prisma.operation.update({
+        where: { id: operation.id },
+        data: {
+          status: "executed",
+          executedAt: new Date(),
+        },
+      }),
+      prisma.operationEvent.create({
+        data: {
+          id: randomUUID(),
+          operationId: operation.id,
+          shop: session.shop,
+          eventType: "execution_completed",
+          metadataJson: JSON.stringify(result),
+        },
+      }),
+    ]);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Shopify execution failed.";
+
+    await prisma.$transaction([
+      prisma.operation.update({
+        where: { id: operation.id },
+        data: {
+          status: "failed",
+          executionFailedAt: new Date(),
+          failureReason: message.slice(0, 4000),
+        },
+      }),
+      prisma.operationEvent.create({
+        data: {
+          id: randomUUID(),
+          operationId: operation.id,
+          shop: session.shop,
+          eventType: "execution_failed",
+          metadataJson: JSON.stringify({
+            message: message.slice(0, 4000),
+          }),
+        },
+      }),
+    ]);
+
+    throw new Response(
+      "Execution stopped safely. The operation was marked failed for review.",
       { status: 409 },
     );
   }
