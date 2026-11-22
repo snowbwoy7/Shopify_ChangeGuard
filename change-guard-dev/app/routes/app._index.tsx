@@ -5,11 +5,13 @@ import type {
 } from "react-router";
 import { useFetcher } from "react-router";
 import { authenticate } from "../shopify.server";
+import prisma from "../db.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import {
   buildPriceChangePlan,
   type ProductSnapshot,
 } from "../lib/change-plan";
+import { createOperationDraft } from "../lib/operation-security";
 
 const MAX_SCAN_PRODUCTS = 10_000;
 
@@ -135,7 +137,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
   const formData = await request.formData();
 
   const operation = String(formData.get("operation") ?? "percentage");
@@ -162,8 +164,29 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       value,
     });
 
+    const operationDraft = createOperationDraft(session.shop, {
+      operation,
+      value,
+      scope,
+      scopeValue,
+    }, plan);
+
+    await prisma.operation.create({
+      data: {
+        id: operationDraft.id,
+        shop: operationDraft.shop,
+        status: operationDraft.status,
+        operationType: operationDraft.operationType,
+        inputJson: JSON.stringify(operationDraft.input),
+        planJson: JSON.stringify(operationDraft.plan),
+        planHash: operationDraft.planHash,
+      },
+    });
+
     return {
       ok: true,
+      operationId: operationDraft.id,
+      planHash: operationDraft.planHash,
       plan,
       capped: products.length >= MAX_SCAN_PRODUCTS,
     };
@@ -246,6 +269,9 @@ export default function Index() {
               <s-banner tone="info">
                 Preview only. No Shopify records have been changed.
               </s-banner>
+              <s-paragraph>
+                Draft operation {fetcher.data.operationId} · plan hash {fetcher.data.planHash}
+              </s-paragraph>
 
               {fetcher.data.capped && (
                 <s-banner tone="warning">
