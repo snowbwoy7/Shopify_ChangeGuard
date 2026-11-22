@@ -15,9 +15,9 @@ export default function App() {
 
   return (
     <AppProvider apiKey={apiKey}>
-      <s-app-nav>
+      <s-stack direction="block" gap="small">
         <s-link href="/app">Change plan</s-link>
-      </s-app-nav>
+      </s-stack>
       <Outlet />
     </AppProvider>
   );
