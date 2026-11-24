@@ -72,4 +72,57 @@ export const operationEventTable = sqliteTable(
   }),
 );
 
+export const promotionTable = sqliteTable(
+  "Promotion",
+  {
+    id: text("id").primaryKey(),
+    shop: text("shop").notNull(),
+    status: text("status").notNull().default("draft"),
+    discountPercent: text("discountPercent").notNull(),
+    startAt: text("startAt").notNull(),
+    endAt: text("endAt").notNull(),
+    planJson: text("planJson").notNull(),
+    planHash: text("planHash").notNull(),
+    approvedAt: text("approvedAt"),
+    activatedAt: text("activatedAt"),
+    restoringAt: text("restoringAt"),
+    completedAt: text("completedAt"),
+    failureReason: text("failureReason"),
+    processingAttempts: integer("processingAttempts").notNull().default(0),
+    lastClaimedAt: text("lastClaimedAt"),
+    createdAt: text("createdAt").notNull(),
+    updatedAt: text("updatedAt").notNull(),
+  },
+  (table) => ({
+    shopStatusIdx: index("Promotion_shop_status_idx").on(table.shop, table.status),
+    scheduleIdx: index("Promotion_status_startAt_endAt_idx").on(
+      table.status,
+      table.startAt,
+      table.endAt,
+    ),
+    planHashIdx: index("Promotion_planHash_idx").on(table.planHash),
+  }),
+);
+
+export const promotionSnapshotTable = sqliteTable(
+  "PromotionSnapshot",
+  {
+    id: text("id").primaryKey(),
+    promotionId: text("promotionId").notNull(),
+    shop: text("shop").notNull(),
+    productId: text("productId").notNull(),
+    variantId: text("variantId").notNull(),
+    originalPrice: text("originalPrice").notNull(),
+    expectedPrice: text("expectedPrice").notNull(),
+    restoredAt: text("restoredAt"),
+    conflictReason: text("conflictReason"),
+  },
+  (table) => ({
+    promotionIdx: index("PromotionSnapshot_promotionId_idx").on(table.promotionId),
+    variantIdx: index("PromotionSnapshot_variantId_idx").on(table.variantId),
+  }),
+);
+
 export type OperationRow = typeof operationTable.$inferSelect;
+export type PromotionRow = typeof promotionTable.$inferSelect;
+export type PromotionSnapshotRow = typeof promotionSnapshotTable.$inferSelect;
