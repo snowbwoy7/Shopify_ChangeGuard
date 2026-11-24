@@ -14,12 +14,19 @@ export type PriceTarget = {
   targetPrice: string;
 };
 
+export type PriceExecutionIssue = {
+  variantId?: string;
+  kind: "conflict" | "error";
+  message: string;
+};
+
 export type PriceExecutionResult = {
   attempted: number;
   applied: number;
   alreadyApplied: number;
   conflicts: number;
   errors: string[];
+  issues: PriceExecutionIssue[];
 };
 
 type CurrentProduct = {
@@ -27,6 +34,10 @@ type CurrentProduct = {
   variants: {
     nodes: Array<{ id: string; price: string }>;
   };
+};
+
+type ExecutePriceTargetsOptions = {
+  throwOnError?: boolean;
 };
 
 function normalizePrice(value: string): string {
@@ -137,6 +148,7 @@ export async function updateProductVariantPrices(
 export async function executePriceTargets(
   admin: AdminGraphqlClient,
   targets: PriceTarget[],
+  options: ExecutePriceTargetsOptions = {},
 ): Promise<PriceExecutionResult> {
   const byProduct = new Map<string, PriceTarget[]>();
 
@@ -152,6 +164,7 @@ export async function executePriceTargets(
     alreadyApplied: 0,
     conflicts: 0,
     errors: [],
+    issues: [],
   };
 
   for (const [productId, items] of byProduct) {
@@ -168,10 +181,14 @@ export async function executePriceTargets(
         const actual = current.get(item.variantId);
 
         if (!actual) {
+          const message = `${item.productTitle} / ${item.variantTitle}: variant no longer exists.`;
           result.conflicts += 1;
-          result.errors.push(
-            `${item.productTitle} / ${item.variantTitle}: variant no longer exists.`,
-          );
+          result.errors.push(message);
+          result.issues.push({
+            variantId: item.variantId,
+            kind: "conflict",
+            message,
+          });
           continue;
         }
 
@@ -181,10 +198,14 @@ export async function executePriceTargets(
         }
 
         if (actual !== item.expectedCurrentPrice) {
+          const message = `${item.productTitle} / ${item.variantTitle}: current price ${actual} differs from approved expected price ${item.expectedCurrentPrice}.`;
           result.conflicts += 1;
-          result.errors.push(
-            `${item.productTitle} / ${item.variantTitle}: current price ${actual} differs from approved expected price ${item.expectedCurrentPrice}.`,
-          );
+          result.errors.push(message);
+          result.issues.push({
+            variantId: item.variantId,
+            kind: "conflict",
+            message,
+          });
           continue;
         }
 
@@ -205,23 +226,44 @@ export async function executePriceTargets(
         const actualAfter = verified.get(item.id);
 
         if (actualAfter !== item.price) {
-          throw new Error(
-            `Product ${productId}, variant ${item.id}: post-write verification failed. Expected ${item.price}, Shopify returned ${actualAfter ?? "missing"}.`,
-          );
+          const message = `Product ${productId}, variant ${item.id}: post-write verification failed. Expected ${item.price}, Shopify returned ${actualAfter ?? "missing"}.`;
+          result.errors.push(message);
+          result.issues.push({
+            variantId: item.id,
+            kind: "error",
+            message,
+          });
+          throw new Error(message);
         }
       }
 
       result.applied += toUpdate.length;
     } catch (error) {
-      result.errors.push(
+      const message =
         error instanceof Error
-          ? `Product ${productId}: ${error.message}`
-          : `Product ${productId}: unknown execution error.`,
-      );
+          ? error.message
+          : "Unknown execution error.";
+
+      if (!result.errors.some((item) => item.includes(message))) {
+        result.errors.push(`Product ${productId}: ${message}`);
+      }
+
+      for (const item of items) {
+        if (!result.issues.some((issue) => issue.variantId === item.variantId)) {
+          result.issues.push({
+            variantId: item.variantId,
+            kind: "error",
+            message: `Product ${productId}: ${message}`,
+          });
+        }
+      }
     }
   }
 
-  if (result.conflicts > 0 || result.errors.length > 0) {
+  if (
+    options.throwOnError !== false &&
+    (result.conflicts > 0 || result.errors.length > 0)
+  ) {
     throw new Error(
       `Execution stopped safely: ${result.applied} applied, ${result.alreadyApplied} already applied, ${result.conflicts} conflicts, ${result.errors.length} errors. ${result.errors.slice(0, 5).join(" | ")}`,
     );
