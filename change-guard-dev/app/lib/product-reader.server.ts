@@ -18,7 +18,7 @@ export function buildProductQuery(
   const escaped = scopeValue
     .trim()
     .replace(/\\/g, "\\\\")
-    .replace(/"/g, "\\"");
+    .replace(/"/g, "\\\"");
 
   switch (scope) {
     case "collection":
