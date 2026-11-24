@@ -252,6 +252,20 @@ export default function Index() {
 
 
 
+      <s-section heading="What do you want to do?">
+        <s-stack direction="inline" gap="base">
+          <s-link href="/app">
+            <s-button variant="primary">Change Prices</s-button>
+          </s-link>
+          <s-link href="/app/promotions/new">
+            <s-button>Run a Promotion</s-button>
+          </s-link>
+        </s-stack>
+        <s-paragraph>
+          Change prices permanently, or run a temporary sale with automatic restoration.
+        </s-paragraph>
+      </s-section>
+
       {loaderData.approvedOperations.length > 0 && (
         <s-section heading="Approved changes">
           <s-stack direction="block" gap="base">
