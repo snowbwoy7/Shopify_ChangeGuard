@@ -364,6 +364,7 @@ export async function markSnapshotConflict(
       and(
         eq(promotionSnapshotTable.id, snapshotId),
         eq(promotionSnapshotTable.shop, shop),
+        isNull(promotionSnapshotTable.restoredAt),
       ),
     )
     .run();
