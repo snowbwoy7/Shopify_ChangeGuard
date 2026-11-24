@@ -12,6 +12,7 @@ import {
   type ProductSnapshot,
 } from "../lib/change-plan";
 import { createOperationDraft } from "../lib/operation-security";
+import { buildProductQuery, readProducts } from "../lib/product-reader.server";
 
 const MAX_SCAN_PRODUCTS = 10_000;
 
@@ -58,7 +59,7 @@ export const action = async ({ request }: ActionFunctionArgs): Promise<ChangePla
   }
 
   try {
-    const products = await readProducts(admin, buildProductQuery(formData));
+    const { products, capped } = await readProducts(admin, buildProductQuery(scope, scopeValue));
     const plan = buildPriceChangePlan(products, {
       operation,
       value,
