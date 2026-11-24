@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs } from "react-router";
-import { useFetcher } from "react-router";
+import { useFetcher, useLoaderData } from "react-router";
 import { authenticate } from "../shopify.server";
 import {
   buildPromotionPlan,
@@ -79,7 +79,7 @@ export default function NewPromotion() {
         Schedule a temporary discount and automatically restore the original prices.
       </s-text>
 
-      <s-section heading="Promotion details">
+      <s-section heading="Promotion details">\n        <s-banner tone="info">\n          Start and end times use the Shopify store timezone: {describeTimeZone(timezone.ianaTimezone, timezone.timezoneAbbreviation)}.\n        </s-banner>
         <fetcher.Form method="post">
           <s-stack direction="block" gap="base">
             <s-number-field
