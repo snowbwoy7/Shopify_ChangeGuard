@@ -28,7 +28,8 @@ export function nextPromotionStatus(
   const transitions: Record<PromotionStatus, Partial<Record<typeof event, PromotionStatus>>> = {
     draft: { approve: "approved", fail: "failed" },
     approved: { schedule: "scheduled", fail: "failed" },
-    scheduled: { start: "active", conflict: "conflict", fail: "failed" },
+    scheduled: { start: "starting", conflict: "conflict", fail: "failed" },
+    starting: { start: "active", conflict: "conflict", fail: "failed" },
     active: { begin_restore: "restoring", conflict: "conflict", fail: "failed" },
     restoring: { complete: "completed", conflict: "conflict", fail: "failed" },
     completed: {},
