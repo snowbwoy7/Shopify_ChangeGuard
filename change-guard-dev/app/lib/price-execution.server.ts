@@ -27,6 +27,8 @@ export type PriceExecutionResult = {
   conflicts: number;
   errors: string[];
   issues: PriceExecutionIssue[];
+  appliedVariantIds: string[];
+  alreadyAppliedVariantIds: string[];
 };
 
 type CurrentProduct = {
@@ -165,6 +167,8 @@ export async function executePriceTargets(
     conflicts: 0,
     errors: [],
     issues: [],
+    appliedVariantIds: [],
+    alreadyAppliedVariantIds: [],
   };
 
   for (const [productId, items] of byProduct) {
@@ -194,6 +198,7 @@ export async function executePriceTargets(
 
         if (actual === item.targetPrice) {
           result.alreadyApplied += 1;
+          result.alreadyAppliedVariantIds.push(item.variantId);
           continue;
         }
 
@@ -238,6 +243,7 @@ export async function executePriceTargets(
       }
 
       result.applied += toUpdate.length;
+      result.appliedVariantIds.push(...toUpdate.map((item) => item.id));
     } catch (error) {
       const message =
         error instanceof Error
