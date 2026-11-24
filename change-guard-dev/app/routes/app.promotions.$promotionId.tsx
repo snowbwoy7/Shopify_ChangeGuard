@@ -13,6 +13,7 @@ function statusTone(status: string): "info" | "success" | "warning" | "critical"
     case "active":
       return "info";
     case "scheduled":
+    case "starting":
     case "approved":
     case "restoring":
       return "warning";
