@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { ProductSnapshot } from "./change-plan";
 
 export type PromotionInput = {
@@ -35,6 +36,12 @@ function roundMoney(value: number): number {
 
 function formatMoney(value: number): string {
   return roundMoney(value).toFixed(2);
+}
+
+export function hashPromotionPlan(plan: PromotionPlan): string {
+  return createHash("sha256")
+    .update(JSON.stringify(plan))
+    .digest("hex");
 }
 
 export function validatePromotionInput(
