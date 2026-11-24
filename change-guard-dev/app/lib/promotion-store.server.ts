@@ -30,7 +30,8 @@ export function assertPromotionTransition(
   const allowed: Record<PromotionStatus, PromotionStatus[]> = {
     draft: ["approved", "failed"],
     approved: ["scheduled", "failed"],
-    scheduled: ["active", "failed", "conflict"],
+    scheduled: ["starting", "failed", "conflict"],
+    starting: ["active", "failed", "conflict"],
     active: ["restoring", "failed", "conflict"],
     restoring: ["completed", "failed", "conflict"],
     completed: [],
