@@ -36,7 +36,8 @@ assert.throws(
 
 assert.equal(nextPromotionStatus("draft", "approve"), "approved");
 assert.equal(nextPromotionStatus("approved", "schedule"), "scheduled");
-assert.equal(nextPromotionStatus("scheduled", "start"), "active");
+assert.equal(nextPromotionStatus("scheduled", "start"), "starting");
+assert.equal(nextPromotionStatus("starting", "start"), "active");
 assert.equal(nextPromotionStatus("active", "begin_restore"), "restoring");
 assert.equal(nextPromotionStatus("restoring", "complete"), "completed");
 
