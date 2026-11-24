@@ -14,6 +14,7 @@ export default [
     route("promotions/new", "./routes/app.promotions.new.tsx"),
     route("promotions/:promotionId/approve", "./routes/app.promotions.$promotionId.approve.tsx"),
     route("promotions/:promotionId", "./routes/app.promotions.$promotionId.tsx"),
+    route("history", "./routes/app.history.tsx"),
   ]),
   route("auth/*", "./routes/auth.$.tsx"),
   route("webhooks/app/scopes_update", "./routes/webhooks.app.scopes_update.tsx"),
