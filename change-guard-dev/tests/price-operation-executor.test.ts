@@ -78,6 +78,9 @@ assert.deepEqual(success, {
   alreadyApplied: 0,
   conflicts: 0,
   errors: [],
+  issues: [],
+  appliedVariantIds: ["gid://shopify/ProductVariant/1"],
+  alreadyAppliedVariantIds: [],
 });
 assert.equal(successAdmin.queries.length, 3);
 
