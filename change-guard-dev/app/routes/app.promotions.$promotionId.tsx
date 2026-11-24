@@ -59,6 +59,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
 
 export default function PromotionDetails() {
   const { promotion, summary } = useLoaderData<typeof loader>();
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   return (
     <s-page heading="Promotion details">
@@ -74,7 +75,7 @@ export default function PromotionDetails() {
           <s-paragraph>
             Discount: {promotion.discountPercent}% · Start:{" "}
             {new Date(promotion.startAt).toLocaleString()} · End:{" "}
-            {new Date(promotion.endAt).toLocaleString()}
+            {new Date(promotion.endAt).toLocaleString()} · {timezone}
           </s-paragraph>
           {promotion.failureReason && (
             <s-banner tone="critical">
