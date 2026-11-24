@@ -13,6 +13,7 @@ export type PromotionStatus =
   | "draft"
   | "approved"
   | "scheduled"
+  | "starting"
   | "active"
   | "restoring"
   | "completed"
