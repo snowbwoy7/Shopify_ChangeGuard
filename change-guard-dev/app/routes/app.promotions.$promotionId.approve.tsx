@@ -1,5 +1,4 @@
 import type { ActionFunctionArgs } from "react-router";
-import { redirect } from "react-router";
 import { authenticate } from "../shopify.server";
 import {
   approvePromotion,
@@ -8,7 +7,7 @@ import {
 } from "../lib/promotion-store.server";
 
 export const action = async ({ request, params }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, redirect } = await authenticate.admin(request);
   const promotionId = params.promotionId;
 
   if (!promotionId) {
