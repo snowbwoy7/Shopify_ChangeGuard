@@ -35,13 +35,22 @@ export async function processDuePromotions(
       const { admin } = await unauthenticated.admin(promotion.shop);
 
       if (promotion.status === "scheduled") {
+        const beganStarting = await transitionPromotion(
+          promotion.id,
+          promotion.shop,
+          "scheduled",
+          "starting",
+        );
+
+        if (!beganStarting) continue;
+
         const execution = await executePromotionStart(admin, snapshots);
 
         if (execution.conflicts > 0 || execution.errors.length > 0) {
           await transitionPromotion(
             promotion.id,
             promotion.shop,
-            "scheduled",
+            "starting",
             "conflict",
             {
               failureReason: execution.errors.join(" | ").slice(0, 4000),
@@ -54,7 +63,7 @@ export async function processDuePromotions(
         await transitionPromotion(
           promotion.id,
           promotion.shop,
-          "scheduled",
+          "starting",
           "active",
           { activatedAt: now.toISOString() },
         );
@@ -110,6 +119,7 @@ export async function processDuePromotions(
 
       if (
         currentStatus === "scheduled" ||
+        currentStatus === "starting" ||
         currentStatus === "active" ||
         currentStatus === "restoring"
       ) {
