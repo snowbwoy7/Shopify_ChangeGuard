@@ -17,7 +17,7 @@
     "graphql-codegen": "graphql-codegen",
     "vite": "vite",
     "typecheck": "react-router typegen && tsc --noEmit",
-    "test": "vite-node tests/change-plan.test.ts && vite-node tests/operation-security.test.ts && vite-node tests/price-operation-executor.test.ts && vite-node tests/promotion-plan.test.ts && vite-node tests/promotion-executor.test.ts && vite-node tests/promotion-lifecycle.test.ts"
+    "test": "vite-node tests/change-plan.test.ts && vite-node tests/operation-security.test.ts && vite-node tests/price-operation-executor.test.ts && vite-node tests/promotion-plan.test.ts && vite-node tests/promotion-executor.test.ts && vite-node tests/promotion-lifecycle.test.ts && vite-node tests/shop-timezone.test.ts"
   },
   "type": "module",
   "engines": {
