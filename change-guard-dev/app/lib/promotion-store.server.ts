@@ -243,6 +243,7 @@ export async function claimDuePromotion(
   now = new Date(),
 ): Promise<PromotionRow | undefined> {
   const timestamp = now.toISOString();
+  const claimCutoff = new Date(now.getTime() - 10 * 60 * 1000).toISOString();
 
   return db.transaction(async (tx) => {
     const result = await tx
