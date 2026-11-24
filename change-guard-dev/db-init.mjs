@@ -61,6 +61,41 @@ const statements = [
     ON OperationEvent(operationId, createdAt)`,
   `CREATE INDEX IF NOT EXISTS OperationEvent_shop_createdAt_idx
     ON OperationEvent(shop, createdAt)`,
+  `CREATE TABLE IF NOT EXISTS Promotion (
+    id TEXT PRIMARY KEY NOT NULL,
+    shop TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'draft',
+    discountPercent TEXT NOT NULL,
+    startAt TEXT NOT NULL,
+    endAt TEXT NOT NULL,
+    planJson TEXT NOT NULL,
+    planHash TEXT NOT NULL,
+    approvedAt TEXT,
+    activatedAt TEXT,
+    restoringAt TEXT,
+    completedAt TEXT,
+    failureReason TEXT,
+    processingAttempts INTEGER NOT NULL DEFAULT 0,
+    lastClaimedAt TEXT,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS Promotion_shop_status_idx ON Promotion(shop, status)`,
+  `CREATE INDEX IF NOT EXISTS Promotion_status_startAt_endAt_idx ON Promotion(status, startAt, endAt)`,
+  `CREATE INDEX IF NOT EXISTS Promotion_planHash_idx ON Promotion(planHash)`,
+  `CREATE TABLE IF NOT EXISTS PromotionSnapshot (
+    id TEXT PRIMARY KEY NOT NULL,
+    promotionId TEXT NOT NULL,
+    shop TEXT NOT NULL,
+    productId TEXT NOT NULL,
+    variantId TEXT NOT NULL,
+    originalPrice TEXT NOT NULL,
+    expectedPrice TEXT NOT NULL,
+    restoredAt TEXT,
+    conflictReason TEXT
+  )`,
+  `CREATE INDEX IF NOT EXISTS PromotionSnapshot_promotionId_idx ON PromotionSnapshot(promotionId)`,
+  `CREATE INDEX IF NOT EXISTS PromotionSnapshot_variantId_idx ON PromotionSnapshot(variantId)`,
 ];
 
 for (const sql of statements) {
