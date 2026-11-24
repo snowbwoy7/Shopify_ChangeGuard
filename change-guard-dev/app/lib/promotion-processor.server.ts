@@ -96,8 +96,12 @@ export async function processDuePromotions(
           // A batch mutation can partially succeed before a later target
           // conflicts. Best-effort restore any variants that did change so a
           // failed promotion does not leave temporary prices behind.
-          if (execution.appliedVariantIds.length > 0 || execution.alreadyAppliedVariantIds.length > 0) {
+          if (
+            execution.appliedVariantIds.length > 0 ||
+            execution.alreadyAppliedVariantIds.length > 0
+          ) {
             const recovery = await executePromotionRestore(admin, snapshots);
+
             for (const variantId of [
               ...recovery.appliedVariantIds,
               ...recovery.alreadyAppliedVariantIds,
@@ -109,9 +113,9 @@ export async function processDuePromotions(
                 await markSnapshotRestored(snapshot.id, promotion.shop);
               }
             }
+
             if (recovery.conflicts > 0 || recovery.errors.length > 0) {
               await markExecutionIssues(
-                promotion.id,
                 promotion.shop,
                 recovery.issues,
                 snapshots,
@@ -124,6 +128,7 @@ export async function processDuePromotions(
             execution.issues,
             snapshots,
           );
+
           await transitionPromotion(
             promotion.id,
             promotion.shop,
@@ -185,6 +190,7 @@ export async function processDuePromotions(
             execution.issues,
             snapshots,
           );
+
           await transitionPromotion(
             promotion.id,
             promotion.shop,

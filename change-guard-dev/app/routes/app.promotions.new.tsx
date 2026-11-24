@@ -131,6 +131,7 @@ export default function NewPromotion() {
   const fetcher = useFetcher<typeof action>();
   const data = fetcher.data;
   const plan = data?.ok ? data.plan : null;
+  const promotionId = data?.ok ? data.promotionId : null;
   const timezone = useLoaderData<typeof loader>();
 
   return (
@@ -177,14 +178,16 @@ export default function NewPromotion() {
             <s-text-field
               label="Start time"
               name="startAt"
-              type="datetime-local"
+              placeholder="YYYY-MM-DDTHH:MM"
+              details="Enter local store time, for example 2026-11-24T20:00."
               required
             ></s-text-field>
 
             <s-text-field
               label="End time"
               name="endAt"
-              type="datetime-local"
+              placeholder="YYYY-MM-DDTHH:MM"
+              details="Enter local store time, for example 2026-11-25T23:59."
               required
             ></s-text-field>
 
@@ -205,60 +208,58 @@ export default function NewPromotion() {
         </s-section>
       )}
 
-      {plan && data.ok && (
-        <>
-          <s-section heading="Promotion preview">
-            <s-banner tone="info">
-              Preview only. No Shopify prices have been changed.
+      {plan && promotionId && (
+        <s-section heading="Promotion preview">
+          <s-banner tone="info">
+            Preview only. No Shopify prices have been changed.
+          </s-banner>
+
+          {data && data.ok && data.capped && (
+            <s-banner tone="warning">
+              Scan stopped at the 10,000-product safety limit.
             </s-banner>
+          )}
 
-            {data.capped && (
-              <s-banner tone="warning">
-                Scan stopped at the 10,000-product safety limit.
-              </s-banner>
-            )}
+          <s-table>
+            <s-table-header-row>
+              <s-table-header listSlot="primary">Product</s-table-header>
+              <s-table-header>Variant</s-table-header>
+              <s-table-header>Original</s-table-header>
+              <s-table-header>Promotion</s-table-header>
+            </s-table-header-row>
+            <s-table-body>
+              {plan.preview.slice(0, 100).map((item) => (
+                <s-table-row key={item.variantId}>
+                  <s-table-cell>{item.productTitle}</s-table-cell>
+                  <s-table-cell>{item.variantTitle}</s-table-cell>
+                  <s-table-cell>{item.originalPrice}</s-table-cell>
+                  <s-table-cell>{item.promotionalPrice ?? "—"}</s-table-cell>
+                </s-table-row>
+              ))}
+            </s-table-body>
+          </s-table>
 
-            <s-table>
-              <s-table-header-row>
-                <s-table-header listSlot="primary">Product</s-table-header>
-                <s-table-header>Variant</s-table-header>
-                <s-table-header>Original</s-table-header>
-                <s-table-header>Promotion</s-table-header>
-              </s-table-header-row>
-              <s-table-body>
-                {plan.preview.slice(0, 100).map((item) => (
-                  <s-table-row key={item.variantId}>
-                    <s-table-cell>{item.productTitle}</s-table-cell>
-                    <s-table-cell>{item.variantTitle}</s-table-cell>
-                    <s-table-cell>{item.originalPrice}</s-table-cell>
-                    <s-table-cell>{item.promotionalPrice ?? "—"}</s-table-cell>
-                  </s-table-row>
-                ))}
-              </s-table-body>
-            </s-table>
-
-            {plan.preview.length > 100 && (
-              <s-paragraph>
-                Showing the first 100 variants. The promotion plan includes all
-                scanned variants.
-              </s-paragraph>
-            )}
-
+          {plan.preview.length > 100 && (
             <s-paragraph>
-              {plan.variantsToChange} variants will change. {plan.errors} variants
-              have errors.
+              Showing the first 100 variants. The promotion plan includes all
+              scanned variants.
             </s-paragraph>
+          )}
 
-            <form
-              method="post"
-              action={`/app/promotions/${data.promotionId}/approve`}
-            >
-              <s-button type="submit" variant="primary">
-                Approve &amp; Schedule Promotion
-              </s-button>
-            </form>
-          </s-section>
-        </>
+          <s-paragraph>
+            {plan.variantsToChange} variants will change. {plan.errors} variants
+            have errors.
+          </s-paragraph>
+
+          <form
+            method="post"
+            action={`/app/promotions/${promotionId}/approve`}
+          >
+            <s-button type="submit" variant="primary">
+              Approve &amp; Schedule Promotion
+            </s-button>
+          </form>
+        </s-section>
       )}
     </s-page>
   );
