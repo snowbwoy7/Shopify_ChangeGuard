@@ -23,6 +23,24 @@ export async function findOperationById(
   return rows[0];
 }
 
+export async function listOperationHistory(shop: string) {
+  return db
+    .select({
+      id: operationTable.id,
+      operationType: operationTable.operationType,
+      status: operationTable.status,
+      approvedAt: operationTable.approvedAt,
+      executedAt: operationTable.executedAt,
+      executionFailedAt: operationTable.executionFailedAt,
+      failureReason: operationTable.failureReason,
+      createdAt: operationTable.createdAt,
+    })
+    .from(operationTable)
+    .where(eq(operationTable.shop, shop))
+    .orderBy(desc(operationTable.createdAt))
+    .limit(25);
+}
+
 export async function listApprovedOperations(shop: string, now = new Date()) {
   return db
     .select({
