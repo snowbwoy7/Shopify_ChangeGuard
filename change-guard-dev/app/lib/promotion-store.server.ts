@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, lte, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { db } from "../db.server";
 import {
@@ -256,6 +256,10 @@ export async function claimDuePromotion(
         and(
           eq(promotionTable.id, promotionId),
           eq(promotionTable.shop, shop),
+          or(
+            isNull(promotionTable.lastClaimedAt),
+            lte(promotionTable.lastClaimedAt, claimCutoff),
+          ),
           or(
             and(
               eq(promotionTable.status, "scheduled"),
