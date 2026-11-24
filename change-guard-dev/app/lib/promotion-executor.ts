@@ -36,7 +36,9 @@ export async function executePromotionStart(
   admin: Parameters<typeof executePriceTargets>[0],
   snapshots: PromotionSnapshotRow[],
 ): Promise<PriceExecutionResult> {
-  return executePriceTargets(admin, buildPromotionStartTargets(snapshots), {\n    throwOnError: false,\n  });
+  return executePriceTargets(admin, buildPromotionStartTargets(snapshots), {
+    throwOnError: false,
+  });
 }
 
 export async function executePromotionRestore(
