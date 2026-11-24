@@ -6,6 +6,7 @@ import type {
 import { useFetcher, useLoaderData } from "react-router";
 import { authenticate } from "../shopify.server";
 import { listApprovedOperations, createOperationWithEvent } from "../lib/operation-store.server";
+import { listPromotions } from "../lib/promotion-store.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import {
   buildPriceChangePlan,
@@ -126,6 +127,26 @@ export default function Index() {
           Change prices permanently, or run a temporary sale with automatic restoration.
         </s-paragraph>
       </s-section>
+
+      {loaderData.promotions.length > 0 && (
+        <s-section heading="Promotions">
+          <s-stack direction="block" gap="base">
+            {loaderData.promotions.slice(-10).reverse().map((promotion) => (
+              <s-banner key={promotion.id} tone={promotion.status === "conflict" || promotion.status === "failed" ? "critical" : "info"}>
+                <s-stack direction="block" gap="small">
+                  <s-paragraph>
+                    {promotion.discountPercent}% promotion · {promotion.status} · starts{" "}
+                    {new Date(promotion.startAt).toLocaleString()}
+                  </s-paragraph>
+                  <s-link href={`/app/promotions/${promotion.id}`}>
+                    <s-button>View promotion status</s-button>
+                  </s-link>
+                </s-stack>
+              </s-banner>
+            ))}
+          </s-stack>
+        </s-section>
+      )}
 
       {loaderData.approvedOperations.length > 0 && (
         <s-section heading="Approved changes">
