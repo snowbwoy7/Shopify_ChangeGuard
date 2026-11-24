@@ -94,6 +94,32 @@ export async function processDuePromotions(
         const execution = await executePromotionStart(admin, snapshots);
 
         if (execution.conflicts > 0 || execution.errors.length > 0) {
+          // A batch mutation can partially succeed before a later target
+          // conflicts. Best-effort restore any variants that did change so a
+          // failed promotion does not leave temporary prices behind.
+          if (execution.appliedVariantIds.length > 0 || execution.alreadyAppliedVariantIds.length > 0) {
+            const recovery = await executePromotionRestore(admin, snapshots);
+            for (const variantId of [
+              ...recovery.appliedVariantIds,
+              ...recovery.alreadyAppliedVariantIds,
+            ]) {
+              const snapshot = snapshots.find(
+                (candidate) => candidate.variantId === variantId,
+              );
+              if (snapshot) {
+                await markSnapshotRestored(snapshot.id, promotion.shop);
+              }
+            }
+            if (recovery.conflicts > 0 || recovery.errors.length > 0) {
+              await markExecutionIssues(
+                promotion.id,
+                promotion.shop,
+                recovery.issues,
+                snapshots,
+              );
+            }
+          }
+
           await markExecutionIssues(
             promotion.id,
             promotion.shop,
@@ -141,6 +167,21 @@ export async function processDuePromotions(
         const execution = await executePromotionRestore(admin, snapshots);
 
         if (execution.conflicts > 0 || execution.errors.length > 0) {
+          // Mark variants that were successfully restored even if another
+          // variant conflicted, so a retry cannot attempt the same restore
+          // against a price that is already back to its original value.
+          for (const variantId of [
+            ...execution.appliedVariantIds,
+            ...execution.alreadyAppliedVariantIds,
+          ]) {
+            const snapshot = snapshots.find(
+              (candidate) => candidate.variantId === variantId,
+            );
+            if (snapshot) {
+              await markSnapshotRestored(snapshot.id, promotion.shop);
+            }
+          }
+
           await markExecutionIssues(
             promotion.id,
             promotion.shop,
