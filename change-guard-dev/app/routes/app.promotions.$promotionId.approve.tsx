@@ -48,7 +48,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     );
   }
 
-  return redirect("/app");
+  return redirect(`/app/promotions/${promotionId}`);
 };
 
 export default function ApprovePromotion() {
