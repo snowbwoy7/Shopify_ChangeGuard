@@ -26,6 +26,8 @@ export async function processDuePromotions(
 
     result.processed += 1;
 
+    let processingStatus = promotion.status;
+
     try {
       const snapshots = await listPromotionSnapshots(
         promotion.id,
@@ -44,6 +46,7 @@ export async function processDuePromotions(
 
         if (!beganStarting) continue;
 
+        processingStatus = "starting";
         const execution = await executePromotionStart(admin, snapshots);
 
         if (execution.conflicts > 0 || execution.errors.length > 0) {
@@ -81,6 +84,7 @@ export async function processDuePromotions(
 
         if (!beganRestoration) continue;
 
+        processingStatus = "restoring";
         const execution = await executePromotionRestore(admin, snapshots);
 
         if (execution.conflicts > 0 || execution.errors.length > 0) {
@@ -115,18 +119,16 @@ export async function processDuePromotions(
       const message =
         error instanceof Error ? error.message : "Unknown promotion processing error.";
 
-      const currentStatus = promotion.status;
-
       if (
-        currentStatus === "scheduled" ||
-        currentStatus === "starting" ||
-        currentStatus === "active" ||
-        currentStatus === "restoring"
+        processingStatus === "scheduled" ||
+        processingStatus === "starting" ||
+        processingStatus === "active" ||
+        processingStatus === "restoring"
       ) {
         await transitionPromotion(
           promotion.id,
           promotion.shop,
-          currentStatus,
+          processingStatus,
           "failed",
           { failureReason: message.slice(0, 4000) },
         );
