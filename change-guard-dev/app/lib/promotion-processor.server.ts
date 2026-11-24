@@ -27,7 +27,6 @@ function executionFailureReason(
 }
 
 async function markExecutionIssues(
-  promotionId: string,
   shop: string,
   issues: Array<{
     variantId?: string;
@@ -121,7 +120,6 @@ export async function processDuePromotions(
           }
 
           await markExecutionIssues(
-            promotion.id,
             promotion.shop,
             execution.issues,
             snapshots,
@@ -183,7 +181,6 @@ export async function processDuePromotions(
           }
 
           await markExecutionIssues(
-            promotion.id,
             promotion.shop,
             execution.issues,
             snapshots,
