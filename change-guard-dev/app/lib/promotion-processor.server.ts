@@ -1,5 +1,15 @@
-import { listDuePromotions, claimDuePromotion, listPromotionSnapshots, transitionPromotion, markSnapshotRestored } from "./promotion-store.server";
-import { executePromotionStart, executePromotionRestore } from "./promotion-executor";
+import {
+  listDuePromotions,
+  claimDuePromotion,
+  listPromotionSnapshots,
+  transitionPromotion,
+  markSnapshotConflict,
+  markSnapshotRestored,
+} from "./promotion-store.server";
+import {
+  executePromotionStart,
+  executePromotionRestore,
+} from "./promotion-executor";
 import { unauthenticated } from "../shopify.server";
 
 export type PromotionProcessorResult = {
@@ -8,6 +18,40 @@ export type PromotionProcessorResult = {
   conflicts: number;
   failures: number;
 };
+
+function executionFailureReason(
+  errors: string[],
+  fallback: string,
+): string {
+  return (errors.length > 0 ? errors.join(" | ") : fallback).slice(0, 4000);
+}
+
+async function markExecutionIssues(
+  promotionId: string,
+  shop: string,
+  issues: Array<{
+    variantId?: string;
+    kind: "conflict" | "error";
+    message: string;
+  }>,
+  snapshots: Array<{ id: string; variantId: string }>,
+): Promise<void> {
+  for (const issue of issues) {
+    if (!issue.variantId) continue;
+
+    const snapshot = snapshots.find(
+      (candidate) => candidate.variantId === issue.variantId,
+    );
+
+    if (!snapshot) continue;
+
+    await markSnapshotConflict(
+      snapshot.id,
+      shop,
+      issue.message,
+    );
+  }
+}
 
 export async function processDuePromotions(
   now = new Date(),
@@ -50,13 +94,22 @@ export async function processDuePromotions(
         const execution = await executePromotionStart(admin, snapshots);
 
         if (execution.conflicts > 0 || execution.errors.length > 0) {
+          await markExecutionIssues(
+            promotion.id,
+            promotion.shop,
+            execution.issues,
+            snapshots,
+          );
           await transitionPromotion(
             promotion.id,
             promotion.shop,
             "starting",
             "conflict",
             {
-              failureReason: execution.errors.join(" | ").slice(0, 4000),
+              failureReason: executionFailureReason(
+                execution.errors,
+                "Promotion start encountered one or more conflicts.",
+              ),
             },
           );
           result.conflicts += 1;
@@ -88,13 +141,22 @@ export async function processDuePromotions(
         const execution = await executePromotionRestore(admin, snapshots);
 
         if (execution.conflicts > 0 || execution.errors.length > 0) {
+          await markExecutionIssues(
+            promotion.id,
+            promotion.shop,
+            execution.issues,
+            snapshots,
+          );
           await transitionPromotion(
             promotion.id,
             promotion.shop,
             "restoring",
             "conflict",
             {
-              failureReason: execution.errors.join(" | ").slice(0, 4000),
+              failureReason: executionFailureReason(
+                execution.errors,
+                "Promotion restoration encountered one or more conflicts.",
+              ),
             },
           );
           result.conflicts += 1;
@@ -117,7 +179,9 @@ export async function processDuePromotions(
       }
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Unknown promotion processing error.";
+        error instanceof Error
+          ? error.message
+          : "Unknown promotion processing error.";
 
       if (
         processingStatus === "scheduled" ||
