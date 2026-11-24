@@ -8,10 +8,7 @@ import { authenticate } from "../shopify.server";
 import { listApprovedOperations, createOperationWithEvent } from "../lib/operation-store.server";
 import { listPromotions } from "../lib/promotion-store.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import {
-  buildPriceChangePlan,
-  type ProductSnapshot,
-} from "../lib/change-plan";
+import { buildPriceChangePlan } from "../lib/change-plan";
 import { createOperationDraft } from "../lib/operation-security";
 import { buildProductQuery, readProducts } from "../lib/product-reader.server";
 
@@ -21,8 +18,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
 
   const approvedOperations = await listApprovedOperations(session.shop);
+  const promotions = await listPromotions(session.shop);
 
-  return { approvedOperations };
+  return { approvedOperations, promotions };
 };
 
 type ChangePlanActionData =
