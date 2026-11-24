@@ -18,4 +18,5 @@ export default [
   route("webhooks/app/scopes_update", "./routes/webhooks.app.scopes_update.tsx"),
   route("webhooks/app/uninstalled", "./routes/webhooks.app.uninstalled.tsx"),
   route("webhooks/products/update", "./routes/webhooks.products.update.tsx"),
+  route("internal/promotions/process", "./routes/internal.promotions.process.ts"),
 ] satisfies RouteConfig;
