@@ -342,7 +342,7 @@ export async function markSnapshotRestored(
       and(
         eq(promotionSnapshotTable.id, snapshotId),
         eq(promotionSnapshotTable.shop, shop),
-        eq(promotionSnapshotTable.restoredAt, null),
+        isNull(promotionSnapshotTable.restoredAt),
       ),
     )
     .run();
