@@ -36,12 +36,12 @@ export async function executePromotionStart(
   admin: Parameters<typeof executePriceTargets>[0],
   snapshots: PromotionSnapshotRow[],
 ): Promise<PriceExecutionResult> {
-  return executePriceTargets(admin, buildPromotionStartTargets(snapshots));
+  return executePriceTargets(admin, buildPromotionStartTargets(snapshots), {\n    throwOnError: false,\n  });
 }
 
 export async function executePromotionRestore(
   admin: Parameters<typeof executePriceTargets>[0],
   snapshots: PromotionSnapshotRow[],
 ): Promise<PriceExecutionResult> {
-  return executePriceTargets(admin, buildPromotionRestoreTargets(snapshots));
+  return executePriceTargets(admin, buildPromotionRestoreTargets(snapshots), {\n    throwOnError: false,\n  });
 }
