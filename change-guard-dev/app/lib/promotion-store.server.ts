@@ -69,7 +69,7 @@ export function createPromotionDraft(
     discountPercent: String(plan.discountPercent),
     startAt: plan.startAt,
     endAt: plan.endAt,
-    plan,
+    plan: plan,
     planHash,
   };
 }
