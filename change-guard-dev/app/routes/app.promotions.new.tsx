@@ -10,6 +10,55 @@ import {
   createPromotionDraft,
   persistPromotionDraft,
 } from "../lib/promotion-store.server";
+import {
+  describeTimeZone,
+  localDateTimeToUtcIso,
+} from "../lib/shop-timezone";
+
+type ShopTimezonePayload = {
+  data?: {
+    shop?: {
+      ianaTimezone: string;
+      timezoneAbbreviation: string;
+    };
+  };
+  errors?: Array<{ message: string }>;
+};
+
+async function readShopTimezone(
+  admin: Awaited<ReturnType<typeof authenticate.admin>>["admin"],
+): Promise<{ ianaTimezone: string; timezoneAbbreviation: string }> {
+  const response = await admin.graphql(
+    `#graphql
+      query ChangeGuardShopTimezone {
+        shop {
+          ianaTimezone
+          timezoneAbbreviation
+        }
+      }`,
+  );
+
+  const payload = (await response.json()) as ShopTimezonePayload;
+
+  if (payload.errors?.length) {
+    throw new Error(
+      payload.errors.map((error) => error.message).join("; "),
+    );
+  }
+
+  const shop = payload.data?.shop;
+
+  if (!shop?.ianaTimezone) {
+    throw new Error("Shopify did not return the store timezone.");
+  }
+
+  return shop;
+}
+
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const { admin } = await authenticate.admin(request);
+  return readShopTimezone(admin);
+};
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -26,6 +75,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   try {
+    const shopTimezone = await readShopTimezone(admin);
+    const normalizedStartAt = localDateTimeToUtcIso(
+      startAt,
+      shopTimezone.ianaTimezone,
+    );
+    const normalizedEndAt = localDateTimeToUtcIso(
+      endAt,
+      shopTimezone.ianaTimezone,
+    );
+
     const { products, capped } = await readProducts(
       admin,
       buildProductQuery(scope, scopeValue),
@@ -33,8 +92,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     const plan = buildPromotionPlan(products, {
       discountPercent,
-      startAt,
-      endAt,
+      startAt: normalizedStartAt,
+      endAt: normalizedEndAt,
     });
 
     if (plan.variantsScanned > 5_000) {
@@ -72,6 +131,7 @@ export default function NewPromotion() {
   const fetcher = useFetcher<typeof action>();
   const data = fetcher.data;
   const plan = data?.ok ? data.plan : null;
+  const timezone = useLoaderData<typeof loader>();
 
   return (
     <s-page heading="Run a Promotion">
@@ -79,7 +139,16 @@ export default function NewPromotion() {
         Schedule a temporary discount and automatically restore the original prices.
       </s-text>
 
-      <s-section heading="Promotion details">\n        <s-banner tone="info">\n          Start and end times use the Shopify store timezone: {describeTimeZone(timezone.ianaTimezone, timezone.timezoneAbbreviation)}.\n        </s-banner>
+      <s-section heading="Promotion details">
+        <s-banner tone="info">
+          Start and end times use the Shopify store timezone:{" "}
+          {describeTimeZone(
+            timezone.ianaTimezone,
+            timezone.timezoneAbbreviation,
+          )}
+          .
+        </s-banner>
+
         <fetcher.Form method="post">
           <s-stack direction="block" gap="base">
             <s-number-field
@@ -119,7 +188,11 @@ export default function NewPromotion() {
               required
             ></s-text-field>
 
-            <s-button type="submit" variant="primary" {...(fetcher.state !== "idle" ? { loading: true } : {})}>
+            <s-button
+              type="submit"
+              variant="primary"
+              {...(fetcher.state !== "idle" ? { loading: true } : {})}
+            >
               Build promotion preview
             </s-button>
           </s-stack>
@@ -138,11 +211,13 @@ export default function NewPromotion() {
             <s-banner tone="info">
               Preview only. No Shopify prices have been changed.
             </s-banner>
+
             {data.capped && (
               <s-banner tone="warning">
                 Scan stopped at the 10,000-product safety limit.
               </s-banner>
             )}
+
             <s-table>
               <s-table-header-row>
                 <s-table-header listSlot="primary">Product</s-table-header>
@@ -161,10 +236,23 @@ export default function NewPromotion() {
                 ))}
               </s-table-body>
             </s-table>
+
+            {plan.preview.length > 100 && (
+              <s-paragraph>
+                Showing the first 100 variants. The promotion plan includes all
+                scanned variants.
+              </s-paragraph>
+            )}
+
             <s-paragraph>
-              {plan.variantsToChange} variants will change. {plan.errors} variants have errors.
+              {plan.variantsToChange} variants will change. {plan.errors} variants
+              have errors.
             </s-paragraph>
-            <form method="post" action={`/app/promotions/${data.promotionId}/approve`}>
+
+            <form
+              method="post"
+              action={`/app/promotions/${data.promotionId}/approve`}
+            >
               <s-button type="submit" variant="primary">
                 Approve &amp; Schedule Promotion
               </s-button>
