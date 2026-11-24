@@ -91,6 +91,16 @@ export async function persistPromotionDraft(
   });
 }
 
+export async function listPromotions(
+  shop: string,
+): Promise<PromotionRow[]> {
+  return db
+    .select()
+    .from(promotionTable)
+    .where(eq(promotionTable.shop, shop))
+    .orderBy(asc(promotionTable.createdAt));
+}
+
 export async function findPromotionById(
   id: string,
   shop: string,
