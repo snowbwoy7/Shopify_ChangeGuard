@@ -8,6 +8,7 @@ import {
   type PromotionSnapshotRow,
 } from "../schema";
 import type { PromotionPlan } from "./promotion-plan";
+import { assertPromotionSchedule } from "./promotion-lifecycle.server";
 
 export type PromotionStatus =
   | "draft"
@@ -214,7 +215,7 @@ export async function schedulePromotion(
 
   return db.transaction(async (tx) => {
     const promotion = await tx
-      .select({ status: promotionTable.status })
+      .select({ status: promotionTable.status, planJson: promotionTable.planJson })
       .from(promotionTable)
       .where(
         and(eq(promotionTable.id, promotionId), eq(promotionTable.shop, shop)),
@@ -222,6 +223,27 @@ export async function schedulePromotion(
       .limit(1);
 
     if (!promotion[0] || promotion[0].status !== "approved") return false;
+
+    const plan = JSON.parse(promotion[0].planJson) as PromotionPlan;
+
+    try {
+      assertPromotionSchedule(plan.startAt, plan.endAt, new Date());
+    } catch {
+      return false;
+    }
+
+    const snapshotCount = await tx
+      .select({ id: promotionSnapshotTable.id })
+      .from(promotionSnapshotTable)
+      .where(
+        and(
+          eq(promotionSnapshotTable.promotionId, promotionId),
+          eq(promotionSnapshotTable.shop, shop),
+        ),
+      )
+      .limit(1);
+
+    if (snapshotCount.length === 0) return false;
 
     const result = await tx
       .update(promotionTable)
