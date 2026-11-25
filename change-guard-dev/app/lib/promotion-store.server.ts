@@ -228,7 +228,25 @@ export async function schedulePromotion(
 
     try {
       assertPromotionSchedule(plan.startAt, plan.endAt, new Date());
-    } catch {
+    } catch (error) {
+      await tx
+        .update(promotionTable)
+        .set({
+          status: "failed",
+          failureReason:
+            error instanceof Error
+              ? error.message
+              : "Promotion schedule is no longer valid.",
+          updatedAt: timestamp,
+        })
+        .where(
+          and(
+            eq(promotionTable.id, promotionId),
+            eq(promotionTable.shop, shop),
+            eq(promotionTable.status, "approved"),
+          ),
+        )
+        .run();
       return false;
     }
 
@@ -243,7 +261,24 @@ export async function schedulePromotion(
       )
       .limit(1);
 
-    if (snapshotCount.length === 0) return false;
+    if (snapshotCount.length === 0) {
+      await tx
+        .update(promotionTable)
+        .set({
+          status: "failed",
+          failureReason: "Promotion has no variants to change.",
+          updatedAt: timestamp,
+        })
+        .where(
+          and(
+            eq(promotionTable.id, promotionId),
+            eq(promotionTable.shop, shop),
+            eq(promotionTable.status, "approved"),
+          ),
+        )
+        .run();
+      return false;
+    }
 
     const result = await tx
       .update(promotionTable)
