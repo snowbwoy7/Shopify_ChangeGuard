@@ -1,0 +1,29 @@
+name: ChangeGuard Promotion Scheduler
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: changeguard-promotion-scheduler
+  cancel-in-progress: false
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Process due promotions
+        env:
+          APP_URL: ${{ vars.CHANGEGUARD_APP_URL }}
+          CRON_SECRET: ${{ secrets.CHANGEGUARD_CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$APP_URL"
+          test -n "$CRON_SECRET"
+          curl --fail-with-body --silent --show-error --max-time 120 \
+            -H "x-cron-secret: $CRON_SECRET" \
+            "$APP_URL/internal/promotions/process"

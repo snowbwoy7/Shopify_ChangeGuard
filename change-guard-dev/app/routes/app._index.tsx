@@ -6,161 +6,21 @@ import type {
 import { useFetcher, useLoaderData } from "react-router";
 import { authenticate } from "../shopify.server";
 import { listApprovedOperations, createOperationWithEvent } from "../lib/operation-store.server";
+import { listPromotions } from "../lib/promotion-store.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import {
-  buildPriceChangePlan,
-  type ProductSnapshot,
-} from "../lib/change-plan";
+import { buildPriceChangePlan } from "../lib/change-plan";
 import { createOperationDraft } from "../lib/operation-security";
+import { buildProductQuery, readProducts } from "../lib/product-reader.server";
 
 const MAX_SCAN_PRODUCTS = 10_000;
-
-function escapeSearchValue(value: string): string {
-  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-}
-
-function buildProductQuery(formData: FormData): string | undefined {
-  const scope = String(formData.get("scope") ?? "all");
-  const value = String(formData.get("scopeValue") ?? "").trim();
-
-  if (scope === "all" || !value) return undefined;
-
-  const escaped = escapeSearchValue(value);
-
-  switch (scope) {
-    case "collection":
-      return `collection_id:${escaped}`;
-    case "product_type":
-      return `product_type:"${escaped}"`;
-    case "vendor":
-      return `vendor:"${escaped}"`;
-    case "tag":
-      return `tag:"${escaped}"`;
-    case "status":
-      return `status:${escaped.toLowerCase()}`;
-    default:
-      return undefined;
-  }
-}
-
-type ShopifyProductsPayload = {
-  data?: {
-    products?: {
-      edges: Array<{
-        cursor: string;
-        node: {
-          id: string;
-          title: string;
-          handle: string;
-          status: string;
-          vendor: string;
-          productType: string;
-          tags: string[];
-          variants: {
-            nodes: Array<{ id: string; title: string; price: string }>;
-          };
-        };
-      }>;
-      pageInfo: { hasNextPage: boolean; endCursor: string | null };
-    };
-  };
-  errors?: Array<{ message: string }>;
-};
-
-async function readProducts(
-  admin: Awaited<ReturnType<typeof authenticate.admin>>["admin"],
-  query: string | undefined,
-): Promise<ProductSnapshot[]> {
-  const products: ProductSnapshot[] = [];
-  let cursor: string | null = null;
-
-  while (products.length < MAX_SCAN_PRODUCTS) {
-    const response = await admin.graphql(
-      `#graphql
-        query ChangeGuardProducts($first: Int!, $after: String, $query: String) {
-          products(first: $first, after: $after, query: $query, sortKey: ID) {
-            edges {
-              cursor
-              node {
-                id
-                title
-                handle
-                status
-                vendor
-                productType
-                tags
-                variants(first: 250) {
-                  nodes {
-                    id
-                    title
-                    price
-                  }
-                }
-              }
-            }
-            pageInfo {
-              hasNextPage
-              endCursor
-            }
-          }
-        }`,
-      {
-        variables: {
-          first: 250,
-          after: cursor,
-          query,
-        },
-      },
-    );
-
-    const payload = (await response.json()) as ShopifyProductsPayload;
-
-    if (payload.errors?.length) {
-      throw new Error(payload.errors.map((error: { message: string }) => error.message).join("; "));
-    }
-
-    const connection = payload.data?.products;
-
-    if (!connection) {
-      throw new Error("Shopify did not return product data.");
-    }
-
-    for (const edge of connection.edges) {
-      products.push({
-        id: edge.node.id,
-        title: edge.node.title,
-        handle: edge.node.handle,
-        status: edge.node.status,
-        vendor: edge.node.vendor,
-        productType: edge.node.productType,
-        tags: edge.node.tags,
-        variants: edge.node.variants.nodes.map(
-          (variant: { id: string; title: string; price: string }) => ({
-            id: variant.id,
-            title: variant.title,
-            price: variant.price,
-          }),
-        ),
-      });
-
-      if (products.length >= MAX_SCAN_PRODUCTS) break;
-    }
-
-    if (!connection.pageInfo.hasNextPage) break;
-    cursor = connection.pageInfo.endCursor;
-
-    if (!cursor) break;
-  }
-
-  return products;
-}
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
 
   const approvedOperations = await listApprovedOperations(session.shop);
+  const promotions = await listPromotions(session.shop);
 
-  return { approvedOperations };
+  return { approvedOperations, promotions };
 };
 
 type ChangePlanActionData =
@@ -198,7 +58,7 @@ export const action = async ({ request }: ActionFunctionArgs): Promise<ChangePla
   }
 
   try {
-    const products = await readProducts(admin, buildProductQuery(formData));
+    const { products, capped } = await readProducts(admin, buildProductQuery(scope, scopeValue));
     const plan = buildPriceChangePlan(products, {
       operation,
       value,
@@ -224,7 +84,7 @@ export const action = async ({ request }: ActionFunctionArgs): Promise<ChangePla
       operationId: operationDraft.id,
       planHash: operationDraft.planHash,
       plan,
-      capped: products.length >= MAX_SCAN_PRODUCTS,
+      capped,
     };
   } catch (error) {
     return {
@@ -251,6 +111,40 @@ export default function Index() {
       </s-text>
 
 
+
+      <s-section heading="What do you want to do?">
+        <s-stack direction="inline" gap="base">
+          <s-link href="/app">
+            <s-button variant="primary">Change Prices</s-button>
+          </s-link>
+          <s-link href="/app/promotions/new">
+            <s-button>Run a Promotion</s-button>
+          </s-link>
+        </s-stack>
+        <s-paragraph>
+          Change prices permanently, or run a temporary sale with automatic restoration.
+        </s-paragraph>
+      </s-section>
+
+      {loaderData.promotions.length > 0 && (
+        <s-section heading="Promotions">
+          <s-stack direction="block" gap="base">
+            {loaderData.promotions.slice(-10).reverse().map((promotion) => (
+              <s-banner key={promotion.id} tone={promotion.status === "conflict" || promotion.status === "failed" ? "critical" : "info"}>
+                <s-stack direction="block" gap="small">
+                  <s-paragraph>
+                    {promotion.discountPercent}% promotion · {promotion.status} · starts{" "}
+                    {new Date(promotion.startAt).toLocaleString()}
+                  </s-paragraph>
+                  <s-link href={`/app/promotions/${promotion.id}`}>
+                    <s-button>View promotion status</s-button>
+                  </s-link>
+                </s-stack>
+              </s-banner>
+            ))}
+          </s-stack>
+        </s-section>
+      )}
 
       {loaderData.approvedOperations.length > 0 && (
         <s-section heading="Approved changes">

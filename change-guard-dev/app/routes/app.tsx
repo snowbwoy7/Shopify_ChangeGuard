@@ -16,7 +16,9 @@ export default function App() {
   return (
     <AppProvider apiKey={apiKey}>
       <s-stack direction="block" gap="small">
-        <s-link href="/app">Change plan</s-link>
+        <s-link href="/app">Change Prices</s-link>
+        <s-link href="/app/promotions/new">Run a Promotion</s-link>
+        <s-link href="/app/history">History</s-link>
       </s-stack>
       <Outlet />
     </AppProvider>
